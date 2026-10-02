@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>太空射擊遊戲</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #070b1c; color: white; font-family: Arial, sans-serif; }
+        .game { width: min(94vw, 680px); text-align: center; }
+        h1 { margin: 0 0 8px; color: #80f7ff; letter-spacing: 2px; }
+        .hud { display: flex; justify-content: space-between; padding: 8px 4px; color: #d4e5ff; }
+        canvas { display: block; width: 100%; background: #080e24; border: 2px solid #36517c; border-radius: 10px; box-shadow: 0 0 30px #1c5a9666; }
+        button { margin-top: 12px; padding: 10px 22px; border: 0; border-radius: 20px; color: #071020; background: #80f7ff; font-weight: bold; cursor: pointer; }
+        p { color: #9eb2d1; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <main class="game">
+        <h1>星際防衛戰</h1>
+        <div class="hud"><span>分數：<b id="score">0</b></span><span>生命：<b id="lives">3</b></span></div>
+        <canvas id="screen" width="640" height="440" aria-label="太空射擊遊戲"></canvas>
+        <button id="start">開始遊戲</button>
+        <p>使用 ← → 或 A、D 移動，按空白鍵射擊。音效會在遊戲開始後啟用。</p>
+    </main>
+    <script>
+        (() => {
+            const canvas = document.getElementById('screen'), ctx = canvas.getContext('2d');
+            const scoreEl = document.getElementById('score'), livesEl = document.getElementById('lives');
+            const keys = {}, stars = Array.from({ length: 75 }, () => ({ x: Math.random() * 640, y: Math.random() * 440, s: Math.random() * 2 + 0.5 }));
+            let player, bullets, enemies, score, lives, running = false, lastSpawn = 0, audio;
+            function tone(freq, duration = .08, type = 'square') {
+                if (!audio) return;
+                const osc = audio.createOscillator(), gain = audio.createGain();
+                osc.type = type; osc.frequency.value = freq; gain.gain.setValueAtTime(.07, audio.currentTime);
+                gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + duration);
+                osc.connect(gain); gain.connect(audio.destination); osc.start(); osc.stop(audio.currentTime + duration);
+            }
+            function start() {
+                audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+                if (audio.state === 'suspended') audio.resume();
+                player = { x: 320, y: 395 }; bullets = []; enemies = []; score = 0; lives = 3;
+                scoreEl.textContent = score; livesEl.textContent = lives; running = true; lastSpawn = 0;
+                document.getElementById('start').textContent = '重新開始'; requestAnimationFrame(loop);
+            }
+            function drawShip(x, y, color, enemy = false) {
+                ctx.fillStyle = color; ctx.beginPath();
+                if (enemy) { ctx.moveTo(x, y + 16); ctx.lineTo(x - 15, y - 10); ctx.lineTo(x, y - 3); ctx.lineTo(x + 15, y - 10); }
+                else { ctx.moveTo(x, y - 18); ctx.lineTo(x - 15, y + 14); ctx.lineTo(x, y + 7); ctx.lineTo(x + 15, y + 14); }
+                ctx.closePath(); ctx.fill();
+            }
+            function loop(time) {
+                ctx.clearRect(0, 0, 640, 440); ctx.fillStyle = '#080e24'; ctx.fillRect(0, 0, 640, 440);
+                ctx.fillStyle = '#c9e6ff'; stars.forEach(s => { ctx.globalAlpha = .4 + Math.random() * .6; ctx.fillRect(s.x, s.y, s.s, s.s); s.y += s.s * .35; if (s.y > 440) s.y = 0; }); ctx.globalAlpha = 1;
+                if (running) {
+                    if (keys.ArrowLeft || keys.a || keys.A) player.x -= 5;
+                    if (keys.ArrowRight || keys.d || keys.D) player.x += 5;
+                    player.x = Math.max(18, Math.min(622, player.x));
+                    if (keys[' '] && time - (player.lastShot || 0) > 240) { bullets.push({ x: player.x, y: player.y - 18 }); player.lastShot = time; tone(650, .06); }
+                    if (time - lastSpawn > Math.max(360, 950 - score * 3)) { enemies.push({ x: 25 + Math.random() * 590, y: -15, speed: 1.5 + Math.random() * 1.5 }); lastSpawn = time; }
+                    bullets.forEach(b => b.y -= 7); enemies.forEach(e => e.y += e.speed);
+                    bullets = bullets.filter(b => b.y > -5);
+                    for (let i = enemies.length - 1; i >= 0; i--) {
+                        const e = enemies[i], hit = bullets.findIndex(b => Math.abs(b.x - e.x) < 19 && Math.abs(b.y - e.y) < 19);
+                        if (hit >= 0) { bullets.splice(hit, 1); enemies.splice(i, 1); score += 10; scoreEl.textContent = score; tone(180, .12, 'sawtooth'); continue; }
+                        if (e.y > 420 || (Math.abs(e.x - player.x) < 23 && Math.abs(e.y - player.y) < 25)) {
+                            enemies.splice(i, 1); lives--; livesEl.textContent = lives; tone(110, .25, 'sawtooth');
+                            if (lives <= 0) running = false;
+                        }
+                    }
+                }
+                bullets.forEach(b => { ctx.fillStyle = '#8affff'; ctx.fillRect(b.x - 2, b.y, 4, 12); });
+                enemies.forEach(e => drawShip(e.x, e.y, '#ff6584', true));
+                if (player) drawShip(player.x, player.y, '#80f7ff');
+                if (!running) { ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.font = 'bold 28px Arial'; ctx.fillText(lives === 0 ? '遊戲結束' : '準備好了嗎？', 320, 220); }
+                if (running) requestAnimationFrame(loop);
+            }
+            document.getElementById('start').addEventListener('click', start);
+            addEventListener('keydown', e => { if (['ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault(); keys[e.key] = true; });
+            addEventListener('keyup', e => { keys[e.key] = false; });
+            loop(0);
+        })();
+    </script>
+</body>
+</html>

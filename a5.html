@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>霓虹街機俄羅斯方塊</title>
+    <!-- Tailwind CSS for modern layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for arcade feel -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #0b0f19;
+            color: #f8fafc;
+            overflow-x: hidden;
+            touch-action: manipulation;
+        }
+        .arcade-font {
+            font-family: 'Press Start 2P', monospace;
+        }
+        .neon-glow {
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.4), inset 0 0 15px rgba(56, 189, 248, 0.2);
+        }
+        .neon-text {
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.8), 0 0 20px rgba(56, 189, 248, 0.5);
+        }
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        @keyframes pulseGlow {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; filter: drop-shadow(0 0 12px rgba(236, 72, 153, 0.8)); }
+        }
+        .animate-glow {
+            animation: pulseGlow 2s infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-between p-4 sm:p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-purple-950 to-slate-950">
+
+    <header class="text-center mb-4">
+        <h1 class="arcade-font text-2xl sm:text-4xl text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-pink-500 to-yellow-400 neon-text tracking-wider">
+            TETRIS ARCADE
+        </h1>
+        <p class="text-xs sm:text-sm text-slate-400 mt-2">使用方向鍵或下方觸控按鈕遊玩 | 內建 Web Audio 晶片音效</p>
+    </header>
+
+    <main class="flex flex-col lg:flex-row gap-6 items-center justify-center w-full max-w-4xl my-auto">
+        
+        <!-- Left Sidebar / Info Panel -->
+        <div class="flex flex-row lg:flex-col gap-4 w-full max-w-xs lg:w-64 justify-around lg:justify-start">
+            <!-- Score Board -->
+            <div class="glass-panel rounded-2xl p-4 text-center neon-glow flex-1 lg:flex-none">
+                <h3 class="arcade-font text-xs text-cyan-400 mb-1">SCORE</h3>
+                <div id="score" class="arcade-font text-lg sm:text-2xl text-white">0</div>
+            </div>
+            <!-- Level & Lines -->
+            <div class="glass-panel rounded-2xl p-4 text-center neon-glow flex-1 lg:flex-none">
+                <div class="mb-3">
+                    <h3 class="arcade-font text-[10px] sm:text-xs text-pink-400 mb-1">LEVEL</h3>
+                    <div id="level" class="arcade-font text-base sm:text-xl text-white">1</div>
+                </div>
+                <div>
+                    <h3 class="arcade-font text-[10px] sm:text-xs text-yellow-400 mb-1">LINES</h3>
+                    <div id="lines" class="arcade-font text-base sm:text-xl text-white">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center: Tetris Game Canvas Container -->
+        <div class="relative p-3 glass-panel rounded-3xl neon-glow flex flex-col items-center">
+            <!-- Sound Toggle Button -->
+            <div class="absolute top-4 right-4 z-10 flex gap-2">
+                <button id="soundToggle" onclick="toggleSound()" class="bg-slate-800/80 hover:bg-slate-700 text-cyan-400 p-2 rounded-xl border border-cyan-500/30 transition shadow-lg flex items-center justify-center text-sm" title="開關音效">
+                    🔊
+                </button>
+                <button id="musicToggle" onclick="toggleMusic()" class="bg-slate-800/80 hover:bg-slate-700 text-pink-400 p-2 rounded-xl border border-pink-500/30 transition shadow-lg flex items-center justify-center text-sm" title="開關背景音樂">
+                    🎵
+                </button>
+            </div>
+
+            <canvas id="tetris" width="240" height="400" class="bg-slate-950 rounded-xl shadow-inner border border-slate-800 block w-[200px] h-[333px] sm:w-[240px] sm:h-[400px]"></canvas>
+
+            <!-- Game Over / Start Overlay -->
+            <div id="overlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-md rounded-3xl flex flex-col items-center justify-center p-6 text-center z-20">
+                <h2 id="overlayTitle" class="arcade-font text-xl sm:text-2xl text-cyan-400 mb-4 neon-text">TETRIS</h2>
+                <p id="overlayDesc" class="text-slate-300 text-sm mb-6 max-w-xs">挑戰你的反應與邏輯！享受完全由瀏覽器音頻合成的經典快感。</p>
+                <button id="startBtn" onclick="startGame()" class="arcade-font bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 px-6 py-3 rounded-xl font-bold transition transform hover:scale-105 shadow-lg shadow-cyan-500/35">
+                    開始遊戲
+                </button>
+            </div>
+        </div>
+
+        <!-- Right Sidebar / Next Piece & Controls -->
+        <div class="flex flex-row lg:flex-col gap-4 w-full max-w-xs lg:w-64 justify-around lg:justify-start">
+            <!-- Next Piece Panel -->
+            <div class="glass-panel rounded-2xl p-4 text-center neon-glow flex flex-col items-center flex-1 lg:flex-none">
+                <h3 class="arcade-font text-xs text-yellow-400 mb-3">NEXT</h3>
+                <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 flex items-center justify-center w-24 h-24">
+                    <canvas id="nextPiece" width="80" height="80" class="block"></canvas>
+                </div>
+            </div>
+
+            <!-- Keyboard Guide / Extra Stats -->
+            <div class="glass-panel rounded-2xl p-4 text-xs text-slate-300 hidden lg:block">
+                <h3 class="arcade-font text-[11px] text-cyan-400 mb-2">操作說明</h3>
+                <ul class="space-y-1.5">
+                    <li>⬅️ ➡️ : 左右移動</li>
+                    <li>⬆️ : 旋轉方塊</li>
+                    <li>⬇️ : 加速下落</li>
+                    <li>空白鍵 : 直接墜落</li>
+                </ul>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="w-full max-w-md mt-4 lg:hidden">
+        <div class="grid grid-cols-4 gap-2">
+            <button onclick="handleControl('left')" class="glass-panel py-3 rounded-xl text-cyan-400 text-lg active:bg-cyan-500/20 font-bold">◀</button>
+            <button onclick="handleControl('rotate')" class="glass-panel py-3 rounded-xl text-yellow-400 text-lg active:bg-yellow-500/20 font-bold">🔄</button>
+            <button onclick="handleControl('drop')" class="glass-panel py-3 rounded-xl text-pink-400 text-lg active:bg-pink-500/20 font-bold">⏬</button>
+            <button onclick="handleControl('right')" class="glass-panel py-3 rounded-xl text-cyan-400 text-lg active:bg-cyan-500/20 font-bold">▶</button>
+        </div>
+    </footer>
+
+    <script>
+        // --- Web Audio API Sound Synthesizer ---
+        let audioCtx = null;
+        let soundEnabled = true;
+        let musicEnabled = true;
+        let musicInterval = null;
+        let musicStep = 0;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // Play standard procedural sound effects
+        function playSound(type) {
+            if (!soundEnabled) return;
+            initAudio();
+            if (!audioCtx) return;
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+
+            if (type === 'move') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.05);
+                osc.start(now);
+                osc.stop(now + 0.05);
+            } else if (type === 'rotate') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(500, now + 0.08);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+                osc.start(now);
+                osc.stop(now + 0.08);
+            } else if (type === 'drop') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(40, now + 0.1);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'clear') {
+                // Triumphant chord for line clearing
+                [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+                    const subOsc = audioCtx.createOscillator();
+                    const subGain = audioCtx.createGain();
+                    subOsc.type = 'sine';
+                    subOsc.frequency.setValueAtTime(freq, now + i * 0.04);
+                    subGain.gain.setValueAtTime(0.1, now + i * 0.04);
+                    subGain.gain.linearRampToValueAtTime(0.01, now + i * 0.04 + 0.2);
+                    subOsc.connect(subGain);
+                    subGain.connect(audioCtx.destination);
+                    subOsc.start(now + i * 0.04);
+                    subOsc.stop(now + i * 0.04 + 0.2);
+                });
+            } else if (type === 'gameover') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.linearRampToValueAtTime(60, now + 0.6);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.6);
+                osc.start(now);
+                osc.stop(now + 0.6);
+            }
+        }
+
+        // Classic Korobeiniki (Tetris Theme) snippet synthesizer for background music
+        const tetrisMelody = [
+            {n: 659.25, d: 4}, {n: 493.88, d: 2}, {n: 523.25, d: 2}, {n: 587.33, d: 4}, {n: 523.25, d: 2}, {n: 493.88, d: 2},
+            {n: 440.00, d: 4}, {n: 440.00, d: 2}, {n: 523.25, d: 2}, {n: 659.25, d: 4}, {n: 587.33, d: 2}, {n: 523.25, d: 2},
+            {n: 493.88, d: 6}, {n: 523.25, d: 2}, {n: 587.33, d: 4}, {n: 659.25, d: 4},
+            {n: 523.25, d: 4}, {n: 440.00, d: 4}, {n: 440.00, d: 4}
+        ];
+
+        function startBGM() {
+            if (!musicEnabled || musicInterval) return;
+            initAudio();
+            musicStep = 0;
+            musicInterval = setInterval(() => {
+                if (!musicEnabled || !audioCtx || isGameOver) return;
+                const note = tetrisMelody[musicStep % tetrisMelody.length];
+                musicStep++;
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(note.n, audioCtx.currentTime);
+                
+                const duration = note.d * 0.1;
+                gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            }, 250);
+        }
+
+        function stopBGM() {
+            if (musicInterval) {
+                clearInterval(musicInterval);
+                musicInterval = null;
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            document.getElementById('soundToggle').innerText = soundEnabled ? '🔊' : '🔇';
+        }
+
+        function toggleMusic() {
+            musicEnabled = !musicEnabled;
+            document.getElementById('musicToggle').innerText = musicEnabled ? '🎵' : '🔇';
+            if (musicEnabled && !isGameOver) {
+                startBGM();
+            } else {
+                stopBGM();
+            }
+        }
+
+        // --- Tetris Game Engine ---
+        const canvas = document.getElementById('tetris');
+        const ctx = canvas.getContext('2d');
+        const nextCanvas = document.getElementById('nextPiece');
+        const nextCtx = nextCanvas.getContext('2d');
+
+        const BLOCK_SIZE = 20;
+        const COLS = 12;
+        const ROWS = 20;
+
+        let board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+        let score = 0;
+        let lines = 0;
+        let level = 1;
+        let dropInterval = 1000;
+        let dropCounter = 0;
+        let lastTime = 0;
+        let isGameOver = true;
+        let gameStarted = false;
+
+        // Tetromino Shapes & Colors (Neon Theme Palette)
+        const SHAPES = [
+            null,
+            [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], // I - Cyan
+            [[2, 0, 0], [2, 2, 2], [0, 0, 0]],                         // J - Blue
+            [[0, 0, 3], [3, 3, 3], [0, 0, 0]],                         // L - Orange/Yellow
+            [[4, 4], [4, 4]],                                          // O - Yellow
+            [[0, 5, 5], [5, 5, 0], [0, 0, 0]],                         // S - Green
+            [[0, 6, 0], [6, 6, 6], [0, 0, 0]],                         // T - Purple
+            [[7, 7, 0], [0, 7, 7], [0, 0, 0]]                          // Z - Pink
+        ];
+
+        const COLORS = [
+            null,
+            '#22d3ee', // Cyan
+            '#3b82f6', // Blue
+            '#f97316', // Orange
+            '#eab308', // Yellow
+            '#22c55e', // Green
+            '#a855f7', // Purple
+            '#ec4899'  // Pink
+        ];
+
+        const player = {
+            pos: { x: 0, y: 0 },
+            matrix: null,
+            shapeIndex: 0
+        };
+
+        const nextPlayer = {
+            matrix: null,
+            shapeIndex: 0
+        };
+
+        function createPiece(type) {
+            return SHAPES[type];
+        }
+
+        function createRandomPiece() {
+            const rand = Math.floor(Math.random() * 7) + 1;
+            return {
+                matrix: createPiece(rand),
+                shapeIndex: rand
+            };
+        }
+
+        function drawMatrix(matrix, offset, context = ctx, customColor = null) {
+            matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        context.fillStyle = customColor || COLORS[value];
+                        context.fillRect((x + offset.x) * BLOCK_SIZE, (y + offset.y) * BLOCK_SIZE, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
+                        
+                        // Add sleek inner shadow/highlight effect
+                        context.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                        context.fillRect((x + offset.x) * BLOCK_SIZE, (y + offset.y) * BLOCK_SIZE, BLOCK_SIZE - 1, 2);
+                    }
+                });
+            });
+        }
+
+        function draw() {
+            // Clear board with dark neon background
+            ctx.fillStyle = '#030712';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid lines for arcade grid look
+            ctx.strokeStyle = '#111827';
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i <= COLS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * BLOCK_SIZE, 0);
+                ctx.lineTo(i * BLOCK_SIZE, canvas.height);
+                ctx.stroke();
+            }
+            for (let j = 0; j <= ROWS; j++) {
+                ctx.beginPath();
+                ctx.moveTo(0, j * BLOCK_SIZE);
+                ctx.lineTo(canvas.width, j * BLOCK_SIZE);
+                ctx.stroke();
+            }
+
+            drawMatrix(board, { x: 0, y: 0 });
+            drawMatrix(player.matrix, player.pos);
+
+            // Draw Next Piece Preview
+            nextCtx.fillStyle = '#030712';
+            nextCtx.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+            if (nextPlayer.matrix) {
+                const matrix = nextPlayer.matrix;
+                const offsetX = (4 - matrix[0].length) / 2;
+                const offsetY = (4 - matrix.length) / 2;
+                drawMatrix(matrix, { x: offsetX, y: offsetY }, nextCtx);
+            }
+        }
+
+        function merge() {
+            player.matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        board[y + player.pos.y][x + player.pos.x] = player.shapeIndex;
+                    }
+                });
+            });
+        }
+
+        function rotate(matrix, dir) {
+            const length = matrix.length;
+            for (let y = 0; y < length; ++y) {
+                for (let x = 0; x < y; ++x) {
+                    [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
+                }
+            }
+            if (dir > 0) {
+                matrix.forEach(row => row.reverse());
+            } else {
+                matrix.reverse();
+            }
+        }
+
+        function playerRotate() {
+            const posX = player.pos.x;
+            let offset = 1;
+            rotate(player.matrix, 1);
+            while (collide()) {
+                player.pos.x += offset;
+                offset = -(offset + (offset > 0 ? 1 : -1));
+                if (offset > player.matrix[0].length) {
+                    rotate(player.matrix, -1);
+                    player.pos.x = posX;
+                    return;
+                }
+            }
+            playSound('rotate');
+        }
+
+        function collide() {
+            const [m, o] = [player.matrix, player.pos];
+            for (let y = 0; y < m.length; ++y) {
+                for (let x = 0; x < m[y].length; ++x) {
+                    if (m[y][x] !== 0 && (board[y + o.y] && board[y + o.y][x + o.x]) !== 0) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function playerDrop() {
+            player.pos.y++;
+            if (collide()) {
+                player.pos.y--;
+                merge();
+                playerReset();
+                sweepRows();
+                playSound('drop');
+            }
+            dropCounter = 0;
+        }
+
+        function playerHardDrop() {
+            while (!collide()) {
+                player.pos.y++;
+            }
+            player.pos.y--;
+            merge();
+            playerReset();
+            sweepRows();
+            playSound('drop');
+            dropCounter = 0;
+        }
+
+        function playerMove(dir) {
+            player.pos.x += dir;
+            if (collide()) {
+                player.pos.x -= dir;
+            } else {
+                playSound('move');
+            }
+        }
+
+        function playerReset() {
+            if (nextPlayer.matrix === null) {
+                const p = createRandomPiece();
+                nextPlayer.matrix = p.matrix;
+                nextPlayer.shapeIndex = p.shapeIndex;
+            }
+            player.matrix = nextPlayer.matrix;
+            player.shapeIndex = nextPlayer.shapeIndex;
+            
+            const nextP = createRandomPiece();
+            nextPlayer.matrix = nextP.matrix;
+            nextPlayer.shapeIndex = nextP.shapeIndex;
+
+            player.pos.y = 0;
+            player.pos.x = Math.floor((COLS - player.matrix[0].length) / 2);
+
+            if (collide()) {
+                // Game Over
+                isGameOver = true;
+                stopBGM();
+                playSound('gameover');
+                document.getElementById('overlay').classList.remove('hidden');
+                document.getElementById('overlayTitle').innerText = 'GAME OVER';
+                document.getElementById('overlayDesc').innerText = `最終得分: ${score}\n再挑戰一次看看你能達到幾級！`;
+                document.getElementById('startBtn').innerText = '重新開始';
+            }
+        }
+
+        function sweepRows() {
+            let rowCount = 0;
+            outer: for (let y = board.length - 1; y > 0; --y) {
+                for (let x = 0; x < board[y].length; ++x) {
+                    if (board[y][x] === 0) {
+                        continue outer;
+                    }
+                }
+                const row = board.splice(y, 1)[0].fill(0);
+                board.unshift(row);
+                ++y;
+                rowCount++;
+            }
+
+            if (rowCount > 0) {
+                lines += rowCount;
+                score += rowCount * rowCount * 100 * level;
+                level = Math.floor(lines / 10) + 1;
+                dropInterval = Math.max(150, 1000 - (level - 1) * 85);
+                
+                document.getElementById('score').innerText = score;
+                document.getElementById('level').innerText = level;
+                document.getElementById('lines').innerText = lines;
+                playSound('clear');
+            }
+        }
+
+        function update(time = 0) {
+            if (isGameOver) return;
+
+            const deltaTime = time - lastTime;
+            lastTime = time;
+            dropCounter += deltaTime;
+
+            if (dropCounter > dropInterval) {
+                playerDrop();
+            }
+
+            draw();
+            requestAnimationFrame(update);
+        }
+
+        function startGame() {
+            initAudio();
+            board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+            score = 0;
+            lines = 0;
+            level = 1;
+            dropInterval = 1000;
+            document.getElementById('score').innerText = score;
+            document.getElementById('level').innerText = level;
+            document.getElementById('lines').innerText = lines;
+
+            document.getElementById('overlay').classList.add('hidden');
+            isGameOver = false;
+            gameStarted = true;
+
+            nextPlayer.matrix = null;
+            playerReset();
+            lastTime = performance.now();
+            update();
+
+            if (musicEnabled) {
+                startBGM();
+            }
+        }
+
+        function handleControl(action) {
+            if (isGameOver) return;
+            if (action === 'left') playerMove(-1);
+            else if (action === 'right') playerMove(1);
+            else if (action === 'rotate') playerRotate();
+            else if (action === 'drop') playerHardDrop();
+        }
+
+        // --- Keyboard Controls ---
+        window.addEventListener('keydown', event => {
+            if (isGameOver) return;
+            if (event.key === 'ArrowLeft') {
+                playerMove(-1);
+                event.preventDefault();
+            } else if (event.key === 'ArrowRight') {
+                playerMove(1);
+                event.preventDefault();
+            } else if (event.key === 'ArrowDown') {
+                playerDrop();
+                event.preventDefault();
+            } else if (event.key === 'ArrowUp') {
+                playerRotate();
+                event.preventDefault();
+            } else if (event.key === ' ') {
+                playerHardDrop();
+                event.preventDefault();
+            }
+        });
+
+        // Initial preview draw
+        draw();
+    </script>
+</body>
+</html>
